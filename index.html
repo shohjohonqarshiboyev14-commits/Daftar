@@ -36,6 +36,8 @@ main{max-width:720px;margin:0 auto;padding:0 16px 110px}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px}
 .chip{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:.9rem}
 .chip[aria-pressed=true]{background:var(--acc);color:var(--on);border-color:var(--acc)}
+.bar .fld{min-width:0}
+.note{background:var(--card);border:1px solid var(--star);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:.9rem}
 .cnt{color:var(--mut);font-size:.85rem;margin:2px 2px 8px}
 .it{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--acc);border-radius:8px 14px 14px 8px;padding:12px 14px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;cursor:pointer}
 .it.s{border-left-color:var(--star)}
@@ -80,8 +82,10 @@ textarea.fld{min-height:42vh;resize:vertical}
     <div class="bar">
       <input id="q" class="fld" type="search" placeholder="Qidirish…">
       <button class="chip" id="fStar" aria-pressed="false">★ Muhim</button>
+      <button class="chip" id="fTrash" aria-pressed="false">Savat</button>
     </div>
     <div class="chips" id="chips"></div>
+    <div class="note" id="bk" hidden></div>
     <div class="cnt" id="cnt"></div>
     <div id="list"></div>
   </main>
@@ -94,9 +98,14 @@ textarea.fld{min-height:42vh;resize:vertical}
     <textarea id="eB" class="fld" placeholder="Matn (ixtiyoriy)"></textarea>
     <input id="eG" class="fld" placeholder="Kategoriya (masalan: parol, g‘oya)" maxlength="40">
     <div class="row">
+      <button class="btn alt sm" id="eCopy">Matnni nusxalash</button>
+      <button class="btn alt sm" id="eGen">Parol yaratish</button>
+    </div>
+    <div class="row">
       <button class="btn" id="eSave">Saqlash</button>
       <button class="btn alt" id="eCancel">Bekor qilish</button>
     </div>
+    <button class="btn alt" id="eRes" hidden>Tiklash</button>
     <button class="btn bad" id="eDel">O‘chirish</button>
   </div>
 </div>
@@ -121,7 +130,7 @@ textarea.fld{min-height:42vh;resize:vertical}
 var $=function(s){return document.querySelector(s)};
 var K='md_vault_v1',F='md_fails',U='md_until';
 var enc=new TextEncoder(),dec=new TextDecoder();
-var key=null,salt=null,items=[],flt={q:'',star:false,tag:''},cur=null,hiddenAt=0,busy=false;
+var key=null,salt=null,items=[],flt={q:'',star:false,tag:'',trash:false},cur=null,hiddenAt=0,busy=false,iters=600000,idleT=0;
 
 function ls(a,k,v){try{if(a==='g')return localStorage.getItem(k);if(a==='s')localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){return null}}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -132,28 +141,28 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function fmt(ts){var d=new Date(ts);return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear()}
 
 /* ---- Shifrlash: PBKDF2 (250 000) + AES-256-GCM ---- */
-async function derive(pin,s){
+async function derive(pin,s,it){
   var m=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:250000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:it||600000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
 }
 async function seal(){
   var iv=crypto.getRandomValues(new Uint8Array(12));
   var ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,enc.encode(JSON.stringify(items)));
-  return{v:1,salt:b64(salt),iv:b64(iv),ct:b64(ct)};
+  return{v:1,it:iters,salt:b64(salt),iv:b64(iv),ct:b64(ct)};
 }
 async function save(){
   var v=await seal();
   try{localStorage.setItem(K,JSON.stringify(v));return true}catch(e){toast('Saqlab bo‘lmadi: xotira to‘lgan');return false}
 }
 async function unseal(v,pin){
-  var s=unb64(v.salt),k=await derive(pin,s);
+  var s=unb64(v.salt),it=v.it||250000,k=await derive(pin,s,it);
   var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(v.iv)},k,unb64(v.ct));
-  return{k:k,s:s,list:JSON.parse(dec.decode(pt))};
+  return{k:k,s:s,it:it,list:JSON.parse(dec.decode(pt))};
 }
 
 /* ---- Qulf ekrani ---- */
 function showLock(){
-  key=null;items=[];cur=null;
+  key=null;items=[];cur=null;clearTimeout(idleT);
   ['#app','#ed','#st'].forEach(function(s){$(s).hidden=true});
   $('#lock').hidden=false;
   var has=!!ls('g',K);
@@ -171,14 +180,14 @@ async function submitLock(){
     if(!v){
       if(pin.length<4){err.textContent='Kamida 4 belgi kiriting.';return}
       if(pin!==$('#pin2').value){err.textContent='Ikkala maydon bir xil emas.';return}
-      salt=crypto.getRandomValues(new Uint8Array(16));key=await derive(pin,salt);items=[];
+      salt=crypto.getRandomValues(new Uint8Array(16));key=await derive(pin,salt,iters);items=[];
       if(await save())enter();
     }else{
       var wait=(+ls('g',U)||0)-Date.now();
       if(wait>0){err.textContent='Biroz kuting: '+Math.ceil(wait/1000)+' soniya.';return}
       try{
         var r=await unseal(JSON.parse(v),pin);
-        key=r.k;salt=r.s;items=r.list;ls('r',F);ls('r',U);enter();
+        key=r.k;salt=r.s;items=r.list;iters=r.it;ls('r',F);ls('r',U);if(iters<600000){iters=600000;salt=crypto.getRandomValues(new Uint8Array(16));key=await derive(pin,salt,iters);await save()}enter();
       }catch(e){
         var n=(+ls('g',F)||0)+1;ls('s',F,n);
         if(n>=5)ls('s',U,Date.now()+Math.min(600,30*(n-4))*1000);
@@ -189,7 +198,10 @@ async function submitLock(){
 }
 function enter(){
   $('#lock').hidden=true;$('#app').hidden=false;
-  flt={q:'',star:false,tag:''};$('#q').value='';render();
+  flt={q:'',star:false,tag:'',trash:false};$('#q').value='';
+  items=items.filter(function(i){return !i.del||Date.now()-i.del<2592e6});
+  render();bump();
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 }
 
 /* ---- Ro‘yxat ---- */
@@ -197,10 +209,12 @@ function render(){
   var q=flt.q.toLowerCase();
   var tags=[];items.forEach(function(i){if(i.tag&&tags.indexOf(i.tag)<0)tags.push(i.tag)});tags.sort();
   if(flt.tag&&tags.indexOf(flt.tag)<0)flt.tag='';
-  $('#fStar').setAttribute('aria-pressed',flt.star);
+  $('#fStar').setAttribute('aria-pressed',flt.star);$('#fTrash').setAttribute('aria-pressed',flt.trash);
+  var bk=$('#bk');bk.hidden=!(items.length&&!flt.trash&&Date.now()-(+ls('g','md_bk')||0)>12096e5);
+  bk.textContent='Zaxira nusxa uzoq vaqtdan beri olinmagan. Sozlamalar → Zaxira nusxa olish.';
   $('#chips').innerHTML=tags.map(function(t){return'<button class="chip" data-tag="'+esc(t)+'" aria-pressed="'+(flt.tag===t)+'">'+esc(t)+'</button>'}).join('');
   var list=items.filter(function(i){
-    return(!flt.star||i.star)&&(!flt.tag||i.tag===flt.tag)&&(!q||(i.title+' '+i.body+' '+i.tag).toLowerCase().indexOf(q)>=0);
+    return(!!i.del===flt.trash)&&(!flt.star||i.star)&&(!flt.tag||i.tag===flt.tag)&&(!q||(i.title+' '+i.body+' '+i.tag).toLowerCase().indexOf(q)>=0);
   }).sort(function(a,b){return(b.star|0)-(a.star|0)||b.upd-a.upd});
   $('#cnt').textContent=items.length?list.length+' ta yozuv':'';
   $('#list').innerHTML=list.length?list.map(function(i){
@@ -213,7 +227,7 @@ function render(){
 function openEd(id){
   cur=id?items.filter(function(i){return i.id===id})[0]:null;
   $('#eT').value=cur?cur.title:'';$('#eB').value=cur?cur.body:'';$('#eG').value=cur?cur.tag:'';
-  $('#eDel').hidden=!cur;$('#ed').hidden=false;$('#eT').focus();
+  $('#eDel').hidden=!cur;$('#eDel').textContent=cur&&cur.del?'Butunlay o‘chirish':'Savatga tashlash';$('#eRes').hidden=!(cur&&cur.del);$('#ed').hidden=false;$('#eT').focus();
 }
 async function saveEd(){
   var t=$('#eT').value.trim(),b=$('#eB').value,g=$('#eG').value.trim();
@@ -223,10 +237,12 @@ async function saveEd(){
   await save();$('#ed').hidden=true;render();toast('Saqlandi');
 }
 async function delEd(){
-  if(!cur||!confirm('Bu yozuv o‘chirilsinmi?'))return;
-  items=items.filter(function(i){return i!==cur});
-  await save();$('#ed').hidden=true;render();toast('O‘chirildi');
+  if(!cur)return;
+  if(!cur.del){cur.del=Date.now();toast('Savatga o‘tkazildi (30 kun saqlanadi)')}
+  else{if(!confirm('Bu yozuv butunlay o‘chiriladi. Davom etilsinmi?'))return;var c=cur;items=items.filter(function(i){return i!==c});toast('O‘chirildi')}
+  await save();$('#ed').hidden=true;render();
 }
+function bump(){clearTimeout(idleT);if(key)idleT=setTimeout(showLock,120000)}
 
 /* ---- Sozlamalar ---- */
 async function exportBk(){
@@ -234,7 +250,7 @@ async function exportBk(){
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='maxfiy-daftar-zaxira-'+new Date().toISOString().slice(0,10)+'.json';
   document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
-  toast('Zaxira nusxa saqlandi');
+  ls('s','md_bk',Date.now());render();toast('Zaxira nusxa saqlandi');
 }
 async function importBk(file){
   try{
@@ -252,7 +268,7 @@ async function changePin(){
   if(p===null)return;
   if(p.length<4){toast('Kamida 4 belgi kerak');return}
   if(p!==prompt('Yangi PIN yoki parolni qayta kiriting:')){toast('Ikkalasi bir xil emas');return}
-  salt=crypto.getRandomValues(new Uint8Array(16));key=await derive(p,salt);
+  salt=crypto.getRandomValues(new Uint8Array(16));iters=600000;key=await derive(p,salt,iters);
   await save();toast('PIN almashtirildi');
 }
 function wipe(){
@@ -277,6 +293,11 @@ $('#list').onclick=async function(e){
 $('#eSave').onclick=saveEd;
 $('#eCancel').onclick=function(){$('#ed').hidden=true};
 $('#eDel').onclick=delEd;
+$('#eRes').onclick=async function(){if(cur){delete cur.del;cur.upd=Date.now();await save();$('#ed').hidden=true;render();toast('Tiklandi')}};
+$('#fTrash').onclick=function(){flt.trash=!flt.trash;render()};
+$('#eGen').onclick=function(){var cs='abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*?',a=crypto.getRandomValues(new Uint32Array(20)),p='';for(var i=0;i<20;i++)p+=cs[a[i]%cs.length];var b=$('#eB');b.value=(b.value?b.value+'\n':'')+p;toast('Kuchli parol qo‘shildi')};
+$('#eCopy').onclick=function(){var t=$('#eB').value;if(!t)return;try{navigator.clipboard.writeText(t).then(function(){toast('Nusxalandi. 30 soniyada tozalanadi');setTimeout(function(){try{navigator.clipboard.writeText('')}catch(e){}},30000)},function(){toast('Nusxalab bo‘lmadi')})}catch(e){toast('Nusxalab bo‘lmadi')}};
+['pointerdown','keydown','scroll'].forEach(function(n){document.addEventListener(n,bump,true)});
 $('#bSet').onclick=function(){$('#st').hidden=false};
 $('#sClose').onclick=function(){$('#st').hidden=true};
 $('#sExp').onclick=exportBk;
@@ -288,7 +309,7 @@ $('#sWipe').onclick=wipe;
 /* Ilova fonga o‘tib 1 daqiqadan ko‘p tursa, avtomatik qulflanadi */
 document.addEventListener('visibilitychange',function(){
   if(document.hidden){hiddenAt=Date.now()}
-  else if(key&&hiddenAt&&Date.now()-hiddenAt>60000){showLock()}
+  else if(key&&hiddenAt&&Date.now()-hiddenAt>15000){showLock()}
 });
 
 showLock();
