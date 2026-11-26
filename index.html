@@ -68,6 +68,7 @@ textarea.fld{min-height:42vh;resize:vertical}
   <input id="pin2" class="fld" type="password" autocomplete="off" placeholder="Qayta kiriting" hidden>
   <p id="lerr" class="err" role="alert"></p>
   <button id="lbtn" class="btn">Kirish</button>
+  <button id="lbio" class="btn alt" hidden>Barmoq izi / yuz bilan kirish</button>
 </section>
 
 <div id="app" hidden>
@@ -116,6 +117,7 @@ textarea.fld{min-height:42vh;resize:vertical}
     <button class="btn alt" id="sExp">Zaxira nusxa olish (shifrlangan)</button>
     <button class="btn alt" id="sImp">Zaxira nusxani yuklash</button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <button class="btn alt" id="sBio">Barmoq izi / yuz bilan kirishni yoqish</button>
     <button class="btn alt" id="sPin">PIN/parolni almashtirish</button>
     <button class="btn bad" id="sWipe">Barcha ma’lumotni o‘chirish</button>
     <button class="btn" id="sClose">Orqaga</button>
@@ -168,7 +170,7 @@ function showLock(){
   var has=!!ls('g',K);
   $('#pin2').hidden=has;
   $('#lmsg').textContent=has?'Kirish uchun PIN yoki parolni kiriting.':'Yangi PIN yoki parol o‘rnating (kamida 4 belgi, 6 va undan ko‘pi yaxshiroq). Uni unutsangiz, ma’lumotni tiklab bo‘lmaydi.';
-  $('#lbtn').textContent=has?'Kirish':'O‘rnatish';
+  $('#lbtn').textContent=has?'Kirish':'O‘rnatish';$('#lbio').hidden=!(has&&ls('g','md_bio'));
   $('#pin').value='';$('#pin2').value='';$('#lerr').textContent='';
 }
 async function submitLock(){
@@ -269,12 +271,43 @@ async function changePin(){
   if(p.length<4){toast('Kamida 4 belgi kerak');return}
   if(p!==prompt('Yangi PIN yoki parolni qayta kiriting:')){toast('Ikkalasi bir xil emas');return}
   salt=crypto.getRandomValues(new Uint8Array(16));iters=600000;key=await derive(p,salt,iters);
-  await save();toast('PIN almashtirildi');
+  await save();ls('r',BIO);toast('PIN almashtirildi. Biometrik kirishni qayta yoqing.');
 }
 function wipe(){
   if(!confirm('Barcha yozuvlar butunlay o‘chiriladi. Davom etilsinmi?'))return;
   if(!confirm('Bu amalni qaytarib bo‘lmaydi. Aniq o‘chirilsinmi?'))return;
-  ls('r',K);ls('r',F);ls('r',U);showLock();
+  ls('r',K);ls('r',F);ls('r',U);ls('r',BIO);showLock();
+}
+
+/* ---- Barmoq izi / yuz bilan kirish (WebAuthn PRF) ---- */
+var BIO='md_bio';
+function rnd(n){return crypto.getRandomValues(new Uint8Array(n))}
+function bioKey(o){return crypto.subtle.importKey('raw',o,'AES-GCM',false,['encrypt','decrypt'])}
+async function bioOn(){
+  try{
+    if(!window.PublicKeyCredential){toast('Bu brauzer qo‘llab-quvvatlamaydi');return}
+    var pin=prompt('Tasdiqlash uchun joriy PIN yoki parolni kiriting:');if(pin===null)return;
+    try{await unseal(JSON.parse(ls('g',K)),pin)}catch(e){toast('PIN yoki parol noto‘g‘ri');return}
+    var cred=await navigator.credentials.create({publicKey:{rp:{name:'Maxfiy daftar'},user:{id:rnd(16),name:'daftar',displayName:'Maxfiy daftar'},challenge:rnd(32),pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},extensions:{prf:{}}}});
+    var x=cred.getClientExtensionResults();
+    if(!x.prf||!x.prf.enabled){toast('Bu telefon xavfsiz biometrik qulfni qo‘llab-quvvatlamaydi');return}
+    var ps=rnd(32);
+    var a=await navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:cred.rawId}],userVerification:'required',extensions:{prf:{eval:{first:ps}}}}});
+    var r=a.getClientExtensionResults().prf;
+    if(!r||!r.results||!r.results.first){toast('Bu telefon xavfsiz biometrik qulfni qo‘llab-quvvatlamaydi');return}
+    var iv=rnd(12),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},await bioKey(r.results.first),enc.encode(pin));
+    ls('s',BIO,JSON.stringify({id:b64(cred.rawId),ps:b64(ps),iv:b64(iv),ct:b64(ct)}));
+    toast('Biometrik kirish yoqildi');
+  }catch(e){toast('Yoqib bo‘lmadi yoki bekor qilindi')}
+}
+async function bioGo(){
+  var b=JSON.parse(ls('g',BIO)||'null');if(!b||busy)return;
+  try{
+    var a=await navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:unb64(b.id)}],userVerification:'required',extensions:{prf:{eval:{first:unb64(b.ps)}}}}});
+    var f=a.getClientExtensionResults().prf.results.first;
+    var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(b.iv)},await bioKey(f),unb64(b.ct));
+    $('#pin').value=dec.decode(pt);await submitLock();
+  }catch(e){$('#lerr').textContent='Biometrik tasdiq bajarilmadi. PIN kiriting.'}
 }
 
 /* ---- Hodisalar ---- */
@@ -298,7 +331,9 @@ $('#fTrash').onclick=function(){flt.trash=!flt.trash;render()};
 $('#eGen').onclick=function(){var cs='abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*?',a=crypto.getRandomValues(new Uint32Array(20)),p='';for(var i=0;i<20;i++)p+=cs[a[i]%cs.length];var b=$('#eB');b.value=(b.value?b.value+'\n':'')+p;toast('Kuchli parol qo‘shildi')};
 $('#eCopy').onclick=function(){var t=$('#eB').value;if(!t)return;try{navigator.clipboard.writeText(t).then(function(){toast('Nusxalandi. 30 soniyada tozalanadi');setTimeout(function(){try{navigator.clipboard.writeText('')}catch(e){}},30000)},function(){toast('Nusxalab bo‘lmadi')})}catch(e){toast('Nusxalab bo‘lmadi')}};
 ['pointerdown','keydown','scroll'].forEach(function(n){document.addEventListener(n,bump,true)});
-$('#bSet').onclick=function(){$('#st').hidden=false};
+$('#bSet').onclick=function(){$('#sBio').textContent=ls('g',BIO)?'Barmoq izi / yuz bilan kirishni o‘chirish':'Barmoq izi / yuz bilan kirishni yoqish';$('#st').hidden=false};
+$('#sBio').onclick=function(){if(ls('g',BIO)){ls('r',BIO);$('#sBio').textContent='Barmoq izi / yuz bilan kirishni yoqish';toast('Biometrik kirish o‘chirildi')}else{bioOn().then(function(){if(ls('g',BIO))$('#sBio').textContent='Barmoq izi / yuz bilan kirishni o‘chirish'})}};
+$('#lbio').onclick=bioGo;
 $('#sClose').onclick=function(){$('#st').hidden=true};
 $('#sExp').onclick=exportBk;
 $('#sImp').onclick=function(){$('#fileIn').click()};
