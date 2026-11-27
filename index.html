@@ -72,11 +72,44 @@ textarea.fld{min-height:42vh;resize:vertical}
 #toast.on{opacity:1}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ---- v4 dizayn ---- */
+:root{--bg2:#DCE5EE;--sh:0 1px 2px rgba(20,32,50,.06),0 8px 24px rgba(20,32,50,.08);--r:18px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg2:#080C12;--sh:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35)}}
+:root[data-theme=dark]{--bg2:#080C12;--sh:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35)}
+body{background:var(--bg);background:linear-gradient(180deg,var(--bg),var(--bg2)) fixed}
+header{position:sticky;top:0;z-index:3;background:var(--bg);background:color-mix(in srgb,var(--bg) 86%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);padding-bottom:10px}
+header h1{display:flex;align-items:center;gap:10px}
+header h1 svg,#lock .lk svg{color:var(--acc)}
+#lock .lk{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;background:var(--card);box-shadow:var(--sh)}
+#lock .lk svg{width:38px;height:38px}
+#lock h1{letter-spacing:-.01em}
+.btn{border-radius:14px;transition:transform .12s,box-shadow .12s}
+.btn:not(.alt):not(.bad){background:var(--acc);background:linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 70%,#000));box-shadow:0 4px 14px color-mix(in srgb,var(--acc) 32%,transparent)}
+.btn:active,.chip:active{transform:scale(.97)}
+.fld{border-radius:14px}
+.fld:focus{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 22%,transparent)}
+.it,.it.s,.it.od{border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px 12px 18px;position:relative;overflow:hidden;animation:up .28s ease both;transition:transform .12s}
+.it::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:4px;border-radius:0 4px 4px 0;background:var(--acc)}
+.it.s::before{background:var(--star)}.it.od::before{background:var(--bad)}
+.it:active{transform:scale(.988)}
+.it h2{font-size:1.08rem;letter-spacing:-.005em}
+@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chip{box-shadow:0 1px 2px rgba(0,0,0,.05);padding:7px 14px}
+.fab{border-radius:20px;padding:16px 24px;box-shadow:0 10px 28px color-mix(in srgb,var(--acc) 45%,transparent)}
+#ed .row:has(#eSave){position:sticky;bottom:0;z-index:2;background:var(--bg);padding:12px 0 calc(12px + env(safe-area-inset-bottom))}
+.ov h2{font-size:1.5rem}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px}.srow .cnt{margin:0}
+.note,.ck{border-radius:14px}.note{box-shadow:var(--sh)}
+.ims img{border-radius:14px}
+.empty{padding:72px 16px}
+#toast{border-radius:14px;box-shadow:var(--sh)}
+@media (prefers-reduced-motion:reduce){.it{animation:none}}
 </style>
 </head>
 <body>
 
 <section id="lock">
+  <div class="lk"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
   <h1>Maxfiy daftar</h1>
   <p id="lmsg"></p>
   <input id="pin" class="fld" type="password" autocomplete="off" placeholder="PIN yoki parol">
@@ -88,7 +121,7 @@ textarea.fld{min-height:42vh;resize:vertical}
 
 <div id="app" hidden>
   <header>
-    <h1>Maxfiy daftar</h1>
+    <h1><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Maxfiy daftar</h1>
     <div>
       <button class="btn alt sm" id="bLock">Qulflash</button>
       <button class="btn alt sm" id="bSet">Sozlamalar</button>
@@ -103,7 +136,7 @@ textarea.fld{min-height:42vh;resize:vertical}
     <div class="chips" id="chips"></div>
     <div class="note" id="bk" hidden></div>
     <button class="note" id="dk" hidden></button>
-    <div class="cnt" id="cnt"></div>
+    <div class="srow"><div class="cnt" id="cnt"></div><button class="chip" id="fSort">Saralash</button></div>
     <div id="list"></div>
   </main>
   <button class="btn fab" id="bNew">+ Yangi yozuv</button>
@@ -115,6 +148,7 @@ textarea.fld{min-height:42vh;resize:vertical}
     <textarea id="eB" class="fld" placeholder="Matn (ixtiyoriy)"></textarea>
     <input id="eG" class="fld" placeholder="Kategoriya (masalan: parol, g‘oya)" maxlength="40">
     <div class="row"><label class="lb" style="flex:1">Muddat<input id="eD" class="fld" type="date"></label><label class="lb" style="flex:1">Vaqt<input id="eTm" class="fld" type="time"></label></div>
+    <label class="lb">Takrorlash<select id="eRp" class="fld"><option value="">Takrorlanmasin</option><option value="day">Har kuni</option><option value="week">Har hafta</option><option value="month">Har oy</option></select></label>
     <button class="btn alt sm" id="eIcs">Telefon kalendariga eslatma qo‘yish</button>
     <div id="cl"></div>
     <div class="row"><input id="cIn" class="fld" placeholder="Ro‘yxat bandi" maxlength="200"><button class="btn alt sm" id="cAdd">Qo‘shish</button></div>
@@ -146,6 +180,8 @@ textarea.fld{min-height:42vh;resize:vertical}
     <button class="btn alt" id="uTh">Mavzu</button>
     <button class="btn alt" id="uAc">Rang</button>
     <button class="btn alt" id="uFs">Shrift</button>
+    <button class="btn alt" id="xTxt">Yozuvlarni matn fayl (.txt) qilib chiqarish</button>
+    <button class="btn alt" id="xPdf">Yozuvlarni PDF qilib chiqarish</button>
     <button class="btn alt" id="sBio">Barmoq izi / yuz bilan kirishni yoqish</button>
     <button class="btn alt" id="sPin">PIN/parolni almashtirish</button>
     <button class="btn bad" id="sWipe">Barcha ma’lumotni o‘chirish</button>
@@ -242,15 +278,15 @@ function render(){
   var q=flt.q.toLowerCase();
   var tags=[];items.forEach(function(i){if(i.tag&&tags.indexOf(i.tag)<0)tags.push(i.tag)});tags.sort();
   if(flt.tag&&tags.indexOf(flt.tag)<0)flt.tag='';
-  $('#fStar').setAttribute('aria-pressed',flt.star);$('#fTrash').setAttribute('aria-pressed',flt.trash);
+  $('#fStar').setAttribute('aria-pressed',flt.star);$('#fTrash').setAttribute('aria-pressed',flt.trash);$('#fSort').textContent='Saralash: '+({new:'Yangi',old:'Eski',az:'A–Z',due:'Muddat'})[flt.sort||'new'];
   var bk=$('#bk');bk.hidden=!(items.length&&!flt.trash&&Date.now()-(+ls('g','md_bk')||0)>12096e5);
   bk.textContent='Zaxira nusxa uzoq vaqtdan beri olinmagan. Sozlamalar → Zaxira nusxa olish.';
   var dn=items.filter(function(i){return !i.del&&i.due&&i.due<=today()}).length,dk=$('#dk');
   if(!dn)flt.due=false;dk.hidden=!dn||flt.trash;dk.textContent=flt.due?'Hammasini ko‘rsatish':'Muddati kelgan yozuvlar: '+dn+' ta (ko‘rish)';
   $('#chips').innerHTML=tags.map(function(t){return'<button class="chip" data-tag="'+esc(t)+'" aria-pressed="'+(flt.tag===t)+'">'+esc(t)+'</button>'}).join('');
   var list=items.filter(function(i){
-    return(!!i.del===flt.trash)&&(!flt.due||(i.due&&i.due<=today()))&&(!flt.star||i.star)&&(!flt.tag||i.tag===flt.tag)&&(!q||(i.title+' '+i.body+' '+i.tag).toLowerCase().indexOf(q)>=0);
-  }).sort(function(a,b){return(b.star|0)-(a.star|0)||b.upd-a.upd});
+    return(!!i.del===flt.trash)&&(!flt.due||(i.due&&i.due<=today()))&&(!flt.star||i.star)&&(!flt.tag||i.tag===flt.tag)&&(!q||(i.title+' '+i.body+' '+i.tag+' '+(i.cl||[]).map(function(c){return c.t}).join(' ')).toLowerCase().indexOf(q)>=0);
+  }).sort(function(a,b){var m=flt.sort||'new';if(m==='old')return a.upd-b.upd;if(m==='az')return(a.title||'').localeCompare(b.title||'');if(m==='due')return(a.due||'9999').localeCompare(b.due||'9999')||b.upd-a.upd;return(b.star|0)-(a.star|0)||b.upd-a.upd});
   $('#cnt').textContent=items.length?list.length+' ta yozuv':'';
   $('#list').innerHTML=list.length?list.map(function(i){
     var sn=i.body.replace(/\s+/g,' ').slice(0,120),ex=[];
@@ -265,7 +301,7 @@ function render(){
 function openEd(id){
   cur=id?items.filter(function(i){return i.id===id})[0]:null;
   $('#eT').value=cur?cur.title:'';$('#eB').value=cur?cur.body:'';$('#eG').value=cur?cur.tag:'';
-  ecl=cur&&cur.cl?cur.cl.map(function(c){return{t:c.t,d:c.d}}):[];eim=cur&&cur.im?cur.im.slice():[];newIm={};$('#eD').value=cur&&cur.due||'';$('#eTm').value=cur&&cur.tm||'';enid=0;$('#cIn').value='';drawCl();loadIm();
+  ecl=cur&&cur.cl?cur.cl.map(function(c){return{t:c.t,d:c.d}}):[];eim=cur&&cur.im?cur.im.slice():[];newIm={};$('#eD').value=cur&&cur.due||'';$('#eTm').value=cur&&cur.tm||'';$('#eRp').value=cur&&cur.rp||'';enid=0;$('#cIn').value='';drawCl();loadIm();
   $('#eDel').hidden=!cur;$('#eDel').textContent=cur&&cur.del?'Butunlay o‘chirish':'Savatga tashlash';$('#eRes').hidden=!(cur&&cur.del);$('#ed').hidden=false;$('#eT').focus();
 }
 async function saveEd(){
@@ -276,7 +312,7 @@ async function saveEd(){
   catch(e){toast('Rasmni saqlab bo‘lmadi (xotira to‘lgan bo‘lishi mumkin)');return}
   var prev=cur&&cur.im?cur.im.slice():[];
   if(!cur){cur={id:uid(),star:false};items.push(cur)}
-  cur.title=t;cur.body=b;cur.tag=g;cur.due=d;cur.tm=$('#eTm').value;if(enid)cur.nid=enid;cur.cl=ecl;cur.im=eim;cur.upd=Date.now();
+  cur.title=t;cur.body=b;cur.tag=g;cur.due=d;cur.tm=$('#eTm').value;cur.rp=$('#eRp').value;if(enid)cur.nid=enid;cur.cl=ecl;cur.im=eim;cur.upd=Date.now();
   if(!(await save()))return;
   prev.forEach(function(id){if(eim.indexOf(id)<0)idbDel(id)});
   imc={};$('#ed').hidden=true;render();toast('Saqlandi');
@@ -298,7 +334,7 @@ async function nativeRemind(d,t){
     var p=await LN.requestPermissions();if(p.display!=='granted'){toast('Bildirishnomaga ruxsat berilmadi');return}
     var at=new Date(d+'T'+t+':00');if(at.getTime()<Date.now()+5000){toast('Bu vaqt o‘tib ketgan');return}
     enid=(cur&&cur.nid)||enid||(Date.now()%2147000000);
-    await LN.schedule({notifications:[{id:enid,title:'Maxfiy daftar',body:'Eslatma vaqti keldi',schedule:{at:at,allowWhileIdle:true}}]});
+    await LN.schedule({notifications:[{id:enid,title:'Maxfiy daftar',body:'Eslatma vaqti keldi',schedule:Object.assign({at:at,allowWhileIdle:true},$('#eRp').value?{repeats:true,every:$('#eRp').value}:{})}]});
     toast('Eslatma qo‘yildi: '+d.split('-').reverse().join('.')+' '+t+'. Yozuvni saqlashni unutmang');
   }catch(e){toast('Eslatma qo‘yib bo‘lmadi')}
 }
@@ -379,7 +415,7 @@ function makeIcs(){
   var ti=($('#eT').value.trim()||'Eslatma').replace(/[\\;,\r\n]/g,' ');
   if(!confirm('Telefon kalendariga faqat sarlavha ("'+ti+'") va vaqt yoziladi, matn yozilmaydi. Davom etilsinmi?'))return;
   var a=new Date(d+'T'+t+':00'),e=new Date(a.getTime()+18e5);
-  var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Maxfiy daftar//UZ','BEGIN:VEVENT','UID:'+uid()+'@daftar','DTSTAMP:'+new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z','DTSTART:'+icsLocal(a),'DTEND:'+icsLocal(e),'SUMMARY:'+ti,'BEGIN:VALARM','TRIGGER:PT0S','ACTION:DISPLAY','DESCRIPTION:'+ti,'END:VALARM','END:VEVENT','END:VCALENDAR'];
+  var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Maxfiy daftar//UZ','BEGIN:VEVENT','UID:'+uid()+'@daftar','DTSTAMP:'+new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z','DTSTART:'+icsLocal(a),'DTEND:'+icsLocal(e),($('#eRp').value?'RRULE:FREQ='+({day:'DAILY',week:'WEEKLY',month:'MONTHLY'})[$('#eRp').value]:'X-DAFTAR:1'),'SUMMARY:'+ti,'BEGIN:VALARM','TRIGGER:PT0S','ACTION:DISPLAY','DESCRIPTION:'+ti,'END:VALARM','END:VEVENT','END:VCALENDAR'];
   var bl=new Blob([L.join('\r\n')],{type:'text/calendar'}),k=document.createElement('a');
   k.href=URL.createObjectURL(bl);k.download='eslatma.ics';document.body.appendChild(k);k.click();k.remove();
   setTimeout(function(){URL.revokeObjectURL(k.href)},4000);
@@ -502,6 +538,60 @@ $('#cl').onclick=function(e){var x=e.target.getAttribute('data-cx');if(x!==null)
 $('#cl').onchange=function(e){var i=e.target.getAttribute('data-ci');if(i!==null){ecl[+i].d=e.target.checked;drawCl()}};
 $('#cAdd').onclick=addCl;
 $('#cIn').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addCl()}});
+function expText(){
+  var L=['### Maxfiy daftar','Eksport: '+fmt(Date.now()),''];
+  items.filter(function(i){return !i.del}).sort(function(a,b){return b.upd-a.upd}).forEach(function(i){
+    L.push('### '+(i.title||'Nomsiz'));var m=[];
+    if(i.tag)m.push('Kategoriya: '+i.tag);if(i.due)m.push('Muddat: '+i.due.split('-').reverse().join('.')+(i.tm?' '+i.tm:''));if(i.im&&i.im.length)m.push('Rasm: '+i.im.length+' ta');
+    if(m.length)L.push(m.join(' | '));if(i.body)L.push(i.body);
+    (i.cl||[]).forEach(function(c){L.push((c.d?'[x] ':'[ ] ')+c.t)});L.push('');
+  });
+  return L.join('\n');
+}
+function mkPdf(text){
+  var W=794,H=1123,M=50,SC=2,pages=[],c,x,y;
+  function np(){c=document.createElement('canvas');c.width=W*SC;c.height=H*SC;x=c.getContext('2d');x.scale(SC,SC);x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#111';x.font='15px sans-serif';y=M;pages.push(c)}
+  function out(t){if(y>H-M)np();x.fillText(t,M,y);y+=22}
+  np();
+  text.split('\n').forEach(function(line){
+    var b=line.indexOf('### ')===0;if(b){line=line.slice(4);y+=6;x.font='bold 18px sans-serif'}
+    var cur='';line.split(' ').forEach(function(w){var t=cur?cur+' '+w:w;if(x.measureText(t).width>W-2*M&&cur){out(cur);cur=w}else cur=t});
+    out(cur);if(b)x.font='15px sans-serif';
+  });
+  var jp=pages.map(function(p){var d=atob(p.toDataURL('image/jpeg',.85).split(',')[1]),a=new Uint8Array(d.length);for(var i=0;i<d.length;i++)a[i]=d.charCodeAt(i);return a});
+  var parts=[],pos=0,xr=[];
+  function w(v){if(typeof v==='string')v=enc.encode(v);parts.push(v);pos+=v.length}
+  function ob(n,f){xr[n]=pos;w(n+' 0 obj\n');f();w('\nendobj\n')}
+  w('%PDF-1.4\n');
+  ob(1,function(){w('<< /Type /Catalog /Pages 2 0 R >>')});
+  ob(2,function(){w('<< /Type /Pages /Count '+jp.length+' /Kids ['+jp.map(function(_,i){return(5+3*i)+' 0 R'}).join(' ')+'] >>')});
+  jp.forEach(function(j,i){
+    ob(3+3*i,function(){w('<< /Type /XObject /Subtype /Image /Width '+W*SC+' /Height '+H*SC+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+j.length+' >>\nstream\n');w(j);w('\nendstream')});
+    var cs='q 595 0 0 842 0 0 cm /Im0 Do Q';
+    ob(4+3*i,function(){w('<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream')});
+    ob(5+3*i,function(){w('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 '+(3+3*i)+' 0 R >> >> /Contents '+(4+3*i)+' 0 R >>')});
+  });
+  var n=3+3*jp.length,xs=pos;
+  w('xref\n0 '+n+'\n0000000000 65535 f \n');
+  for(var k=1;k<n;k++)w(('0000000000'+xr[k]).slice(-10)+' 00000 n \n');
+  w('trailer\n<< /Size '+n+' /Root 1 0 R >>\nstartxref\n'+xs+'\n%%EOF');
+  return new Blob(parts,{type:'application/pdf'});
+}
+async function outFile(name,mime,data,isB64){
+  if(!confirm('Yozuvlar shifrlanmagan holda telefoningizga chiqariladi. Davom etilsinmi?'))return;
+  try{
+    if(NATIVE&&plg('Filesystem')&&plg('Share')){
+      var o={path:name,data:data,directory:'CACHE'};if(!isB64)o.encoding='utf8';
+      var r=await plg('Filesystem').writeFile(o);
+      await plg('Share').share({title:name,files:[r.uri],dialogTitle:'Faylni saqlash yoki yuborish'});
+      plg('Filesystem').deleteFile({path:name,directory:'CACHE'}).catch(function(){});
+    }else{
+      var f=new File([isB64?unb64(data):data],name,{type:mime});
+      if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f]});
+      else{var a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},4000)}
+    }
+  }catch(e){var m=String(e&&(e.message||e.name)).toLowerCase();if(m.indexOf('cancel')<0&&m.indexOf('abort')<0)toast('Faylni chiqarib bo‘lmadi')}
+}
 var MAXIM=Infinity,ivId='';
 async function outImgs(ids){
   var list=ids.filter(function(id){return imc[id]});
@@ -523,6 +613,9 @@ async function outImgs(ids){
 }
 $('#iAdd').onclick=function(){$('#iIn').click()};
 $('#iAll').onclick=function(){outImgs(eim)};
+$('#fSort').onclick=function(){var o=['new','old','az','due'],i=o.indexOf(flt.sort||'new');flt.sort=o[(i+1)%o.length];render()};
+$('#xTxt').onclick=function(){outFile('maxfiy-daftar-'+today()+'.txt','text/plain',expText().replace(/^### /gm,''),false)};
+$('#xPdf').onclick=async function(){try{toast('PDF tayyorlanmoqda…');var bl=mkPdf(expText());await outFile('maxfiy-daftar-'+today()+'.pdf','application/pdf',b64(await bl.arrayBuffer()),true)}catch(e){toast('PDF yaratib bo‘lmadi')}};
 $('#ivSave').onclick=function(){outImgs([ivId])};
 $('#uIq').onclick=function(){uiNext('iq',{n:1,h:1},'n')};
 $('#iIn').onchange=async function(e){var fs=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
