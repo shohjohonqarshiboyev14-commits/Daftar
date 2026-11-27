@@ -1,0 +1,49 @@
+name: APK
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Capacitor loyihasi
+        run: |
+          mkdir www
+          cp index.html manifest.json icon-192.png icon-512.png www/
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Skrinshotni taqiqlash
+        run: |
+          mkdir -p android/app/src/main/java/uz/maxfiy/daftar
+          cat > android/app/src/main/java/uz/maxfiy/daftar/MainActivity.java <<'EOF'
+          package uz.maxfiy.daftar;
+          import android.os.Bundle;
+          import android.view.WindowManager;
+          import com.getcapacitor.BridgeActivity;
+          public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle b) {
+              getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+              super.onCreate(b);
+            }
+          }
+          EOF
+      - name: APK qurish
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Maxfiy daftar v${{ github.run_number }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
