@@ -70,6 +70,7 @@ jobs:
           if 'xmlns:tools' not in s:
               s=s.replace('<manifest ','<manifest xmlns:tools="http://schemas.android.com/tools" ',1)
           s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
+          s=s.replace('</manifest>','<uses-permission android:name="android.permission.RECORD_AUDIO" />\n<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n</manifest>')
           open(p,'w').write(s)
           PY
           grep -n "INTERNET\|allowBackup" $M
