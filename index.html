@@ -48,8 +48,9 @@ main{max-width:720px;margin:0 auto;padding:0 16px 110px}
 .ims{display:flex;gap:10px;flex-wrap:wrap}.ims div{position:relative}
 .ims img{width:92px;height:92px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .ims .btn{position:absolute;top:-8px;right:-8px;padding:2px 9px;background:var(--card)}
-#iv{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:8;display:flex;align-items:center;justify-content:center}
-#iv img{max-width:100%;max-height:100%}
+#iv{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#ivb{display:flex;gap:10px;padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+#iv img{max-width:100%;max-height:calc(100% - 90px);object-fit:contain}
 button.note{width:100%;text-align:left;cursor:pointer}#dk{border-color:var(--bad)}
 .od{border-left-color:var(--bad)}
 .cnt{color:var(--mut);font-size:.85rem;margin:2px 2px 8px}
@@ -118,8 +119,8 @@ textarea.fld{min-height:42vh;resize:vertical}
     <div id="cl"></div>
     <div class="row"><input id="cIn" class="fld" placeholder="Ro‘yxat bandi" maxlength="200"><button class="btn alt sm" id="cAdd">Qo‘shish</button></div>
     <div id="ims" class="ims"></div>
-    <div class="row"><button class="btn alt sm" id="iAdd">Rasm qo‘shish (3 tagacha)</button></div>
-    <input type="file" id="iIn" accept="image/*" hidden>
+    <div class="row"><button class="btn alt sm" id="iAdd">Rasm qo‘shish</button><button class="btn alt sm" id="iAll">Hamma rasmni chiqarish</button></div>
+    <input type="file" id="iIn" accept="image/*" multiple hidden>
     <div class="row">
       <button class="btn alt sm" id="eCopy">Matnni nusxalash</button>
       <button class="btn alt sm" id="eGen">Parol yaratish</button>
@@ -141,6 +142,7 @@ textarea.fld{min-height:42vh;resize:vertical}
     <button class="btn alt" id="sImp">Zaxira nusxani yuklash</button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
     <button class="btn alt" id="sShare">Ilovani do‘stga yuborish</button>
+    <button class="btn alt" id="uIq">Rasm sifati</button>
     <button class="btn alt" id="uTh">Mavzu</button>
     <button class="btn alt" id="uAc">Rang</button>
     <button class="btn alt" id="uFs">Shrift</button>
@@ -151,7 +153,7 @@ textarea.fld{min-height:42vh;resize:vertical}
   </div>
 </div>
 
-<div id="iv" hidden><img id="ivImg" alt="Rasm"></div>
+<div id="iv" hidden><img id="ivImg" alt="Rasm"><div id="ivb"><button class="btn" id="ivSave">Telefonga saqlash / yuborish</button><button class="btn alt" id="ivClose">Yopish</button></div></div>
 
 <div id="toast" role="status"></div>
 
@@ -352,7 +354,7 @@ function idbDel(id){return idbReq('readwrite',function(o){return o.delete(id)}).
 async function setIk(raw){ikRaw=raw;imk=await crypto.subtle.importKey('raw',unb64(raw),'AES-GCM',false,['encrypt','decrypt'])}
 async function imgSeal(u){var iv=rnd(12);return{iv:iv,ct:await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},imk,enc.encode(u))}}
 async function imgOpen(id){var v=await idbGet(id);if(!v)return null;try{return dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:v.iv},imk,v.ct))}catch(e){return null}}
-async function loadIm(){for(var q=0;q<eim.length;q++){var id=eim[q];if(!imc[id]){var u=await imgOpen(id);if(u)imc[id]=u}}drawIm()}
+async function loadIm(){for(var q=0;q<eim.length;q++){var id=eim[q];if(!imc[id]){var u=await imgOpen(id);if(u)imc[id]=u}if(q%8===7)drawIm()}drawIm()}
 async function migrateImgs(){
   var ch=false;
   try{
@@ -389,7 +391,7 @@ var ecl=[],eim=[];
 function today(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
 function drawCl(){$('#cl').innerHTML=ecl.map(function(c,i){return'<div class="ck'+(c.d?' d':'')+'"><input type="checkbox" data-ci="'+i+'"'+(c.d?' checked':'')+' aria-label="Bajarildi"><span>'+esc(c.t)+'</span><button data-cx="'+i+'" aria-label="O‘chirish">×</button></div>'}).join('')}
 function drawIm(){$('#ims').innerHTML=eim.map(function(id,i){var u=imc[id];if(!u||!/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(u))return'';return'<div><img src="'+u+'" data-iv="'+i+'" alt="Rasm"><button class="btn bad sm" data-ix="'+i+'" aria-label="Rasmni o‘chirish">×</button></div>'}).join('')}
-function shrink(f){return new Promise(function(ok,no){var im=new Image(),u=URL.createObjectURL(f);im.onload=function(){var r=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*r);c.height=Math.round(im.height*r);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.6))};im.onerror=no;im.src=u})}
+function shrink(f){return new Promise(function(ok,no){var im=new Image(),u=URL.createObjectURL(f);im.onload=function(){var hq=uiGet().iq==='h',r=Math.min(1,(hq?1920:900)/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*r);c.height=Math.round(im.height*r);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',hq?.85:.6))};im.onerror=no;im.src=u})}
 function addCl(){var v=$('#cIn').value.trim();if(!v)return;ecl.push({t:v.slice(0,200),d:false});$('#cIn').value='';drawCl()}
 
 /* ---- Mavzu, rang, shrift ---- */
@@ -402,7 +404,7 @@ function uiApply(){
   var dark=th==='dark'||(th==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches),a=ACC[u.ac]||ACC.teal,f=FS[u.fs]||FS.m;
   r.style.setProperty('--acc',dark?a[2]:a[1]);r.style.fontSize=f[1];
   var m=document.querySelector('meta[name=theme-color]');if(m)m.content=a[1];
-  $('#uTh').textContent='Mavzu: '+TH[th];$('#uAc').textContent='Rang: '+a[0];$('#uFs').textContent='Shrift: '+f[0];
+  $('#uTh').textContent='Mavzu: '+TH[th];$('#uAc').textContent='Rang: '+a[0];$('#uFs').textContent='Shrift: '+f[0];$('#uIq').textContent='Rasm sifati: '+(u.iq==='h'?'Yuqori':'Oddiy');
 }
 function uiNext(k,list,def){var u=uiGet(),ks=Object.keys(list),i=ks.indexOf(u[k]||def);u[k]=ks[(i+1)%ks.length];ls('s','md_ui',JSON.stringify(u));uiApply()}
 
@@ -500,10 +502,34 @@ $('#cl').onclick=function(e){var x=e.target.getAttribute('data-cx');if(x!==null)
 $('#cl').onchange=function(e){var i=e.target.getAttribute('data-ci');if(i!==null){ecl[+i].d=e.target.checked;drawCl()}};
 $('#cAdd').onclick=addCl;
 $('#cIn').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addCl()}});
-$('#iAdd').onclick=function(){if(eim.length>=3){toast('Ko‘pi bilan 3 ta rasm');return}$('#iIn').click()};
-$('#iIn').onchange=async function(e){var f=e.target.files[0];e.target.value='';if(!f)return;try{var u=await shrink(f),id=uid();imc[id]=u;newIm[id]=1;eim.push(id);drawIm()}catch(x){toast('Rasmni o‘qib bo‘lmadi')}};
-$('#ims').onclick=function(e){var x=e.target.getAttribute('data-ix'),v=e.target.getAttribute('data-iv');if(x!==null){eim.splice(+x,1);drawIm()}else if(v!==null){$('#ivImg').src=imc[eim[+v]];$('#iv').hidden=false}};
-$('#iv').onclick=function(){$('#iv').hidden=true};
+var MAXIM=Infinity,ivId='';
+async function outImgs(ids){
+  var list=ids.filter(function(id){return imc[id]});
+  if(!list.length){toast('Rasm yo‘q');return}
+  if(!confirm('Rasm shifrlanmagan holda telefoningizga chiqariladi. Davom etilsinmi?'))return;
+  var made=[];
+  try{
+    if(NATIVE&&plg('Filesystem')&&plg('Share')){
+      var uris=[];
+      for(var i=0;i<list.length;i++){var p='daftar-rasm-'+Date.now()+'-'+i+'.jpg';var w=await plg('Filesystem').writeFile({path:p,data:imc[list[i]].split(',')[1],directory:'CACHE'});made.push(p);uris.push(w.uri)}
+      await plg('Share').share({title:'Rasmlar',files:uris,dialogTitle:'Rasmni saqlash yoki yuborish'});
+    }else{
+      var fl=list.map(function(id,i){var b=atob(imc[id].split(',')[1]),a=new Uint8Array(b.length);for(var k=0;k<b.length;k++)a[k]=b.charCodeAt(k);return new File([a],'daftar-rasm-'+(i+1)+'.jpg',{type:'image/jpeg'})});
+      if(navigator.canShare&&navigator.canShare({files:fl}))await navigator.share({files:fl});
+      else fl.forEach(function(f,i){setTimeout(function(){var a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove()},i*300)});
+    }
+  }catch(e){var m=String(e&&(e.message||e.name)).toLowerCase();if(m.indexOf('cancel')<0&&m.indexOf('abort')<0)toast('Rasmni chiqarib bo‘lmadi')}
+  made.forEach(function(p){try{plg('Filesystem').deleteFile({path:p,directory:'CACHE'}).catch(function(){})}catch(e){}});
+}
+$('#iAdd').onclick=function(){$('#iIn').click()};
+$('#iAll').onclick=function(){outImgs(eim)};
+$('#ivSave').onclick=function(){outImgs([ivId])};
+$('#uIq').onclick=function(){uiNext('iq',{n:1,h:1},'n')};
+$('#iIn').onchange=async function(e){var fs=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
+  for(var k=0;k<fs.length;k++){if(fs.length>1)toast('Rasm '+(k+1)+' / '+fs.length);
+    try{var u=await shrink(fs[k]),id=uid();imc[id]=u;newIm[id]=1;eim.push(id);drawIm()}catch(x){toast('Ba’zi rasmlarni o‘qib bo‘lmadi')}}};
+$('#ims').onclick=function(e){var x=e.target.getAttribute('data-ix'),v=e.target.getAttribute('data-iv');if(x!==null){eim.splice(+x,1);drawIm()}else if(v!==null){ivId=eim[+v];$('#ivImg').src=imc[ivId];$('#iv').hidden=false}};
+$('#iv').onclick=function(e){if(e.target.id==='iv'||e.target.id==='ivImg'||e.target.id==='ivClose')$('#iv').hidden=true};
 $('#eIcs').onclick=makeIcs;
 if(NATIVE){$('#eIcs').textContent='Bildirishnoma eslatmasi qo‘yish'}
 $('#sClose').onclick=function(){$('#st').hidden=true};
