@@ -140,6 +140,7 @@ textarea.fld{min-height:42vh;resize:vertical}
     <button class="btn alt" id="sExp">Zaxira nusxa olish (shifrlangan)</button>
     <button class="btn alt" id="sImp">Zaxira nusxani yuklash</button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <button class="btn alt" id="sShare">Ilovani do‘stga yuborish</button>
     <button class="btn alt" id="uTh">Mavzu</button>
     <button class="btn alt" id="uAc">Rang</button>
     <button class="btn alt" id="uFs">Shrift</button>
@@ -410,6 +411,7 @@ var BIO='md_bio';
 function rnd(n){return crypto.getRandomValues(new Uint8Array(n))}
 function bioKey(o){return crypto.subtle.importKey('raw',o,'AES-GCM',false,['encrypt','decrypt'])}
 async function bioOn(){
+  if(NATIVE)return nbOn();
   try{
     if(!window.PublicKeyCredential){toast('Bu brauzer qo‘llab-quvvatlamaydi');return}
     var pin=prompt('Tasdiqlash uchun joriy PIN yoki parolni kiriting:');if(pin===null)return;
@@ -427,12 +429,35 @@ async function bioOn(){
   }catch(e){toast('Yoqib bo‘lmadi yoki bekor qilindi')}
 }
 async function bioGo(){
+  if(NATIVE)return nbGo();
   var b=JSON.parse(ls('g',BIO)||'null');if(!b||busy)return;
   try{
     var a=await navigator.credentials.get({publicKey:{challenge:rnd(32),allowCredentials:[{type:'public-key',id:unb64(b.id)}],userVerification:'required',extensions:{prf:{eval:{first:unb64(b.ps)}}}}});
     var f=a.getClientExtensionResults().prf.results.first;
     var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(b.iv)},await bioKey(f),unb64(b.ct));
     $('#pin').value=dec.decode(pt);await submitLock();
+  }catch(e){$('#lerr').textContent='Biometrik tasdiq bajarilmadi. PIN kiriting.'}
+}
+
+/* ---- APK: Android biometrik kirish ---- */
+var NB_SERVER='uz.maxfiy.daftar';
+async function nbOn(){
+  var NB=plg('NativeBiometric');if(!NB){toast('Bu qurilmada mavjud emas');return}
+  try{
+    var av=await NB.isAvailable();if(!av.isAvailable){toast('Telefonda barmoq izi yoki yuz sozlanmagan');return}
+    var pin=prompt('Tasdiqlash uchun joriy PIN yoki parolni kiriting:');if(pin===null)return;
+    try{await unseal(JSON.parse(ls('g',K)),pin)}catch(e){toast('PIN yoki parol noto‘g‘ri');return}
+    await NB.verifyIdentity({reason:'Biometrik kirishni yoqish',title:'Maxfiy daftar'});
+    await NB.setCredentials({username:'daftar',password:pin,server:NB_SERVER});
+    ls('s',BIO,'native');toast('Biometrik kirish yoqildi');
+  }catch(e){toast('Yoqib bo‘lmadi yoki bekor qilindi')}
+}
+async function nbGo(){
+  var NB=plg('NativeBiometric');if(!NB||busy)return;
+  try{
+    await NB.verifyIdentity({reason:'Ilovaga kirish',title:'Maxfiy daftar'});
+    var c=await NB.getCredentials({server:NB_SERVER});
+    $('#pin').value=c.password;await submitLock();
   }catch(e){$('#lerr').textContent='Biometrik tasdiq bajarilmadi. PIN kiriting.'}
 }
 
@@ -458,10 +483,19 @@ $('#eGen').onclick=function(){var cs='abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRS
 $('#eCopy').onclick=function(){var t=$('#eB').value;if(!t)return;try{navigator.clipboard.writeText(t).then(function(){toast('Nusxalandi. 30 soniyada tozalanadi');setTimeout(function(){try{navigator.clipboard.writeText('')}catch(e){}},30000)},function(){toast('Nusxalab bo‘lmadi')})}catch(e){toast('Nusxalab bo‘lmadi')}};
 ['pointerdown','keydown','scroll'].forEach(function(n){document.addEventListener(n,bump,true)});
 $('#bSet').onclick=function(){$('#sBio').textContent=ls('g',BIO)?'Barmoq izi / yuz bilan kirishni o‘chirish':'Barmoq izi / yuz bilan kirishni yoqish';$('#st').hidden=false;stInfo()};
-$('#sBio').onclick=function(){if(ls('g',BIO)){ls('r',BIO);$('#sBio').textContent='Barmoq izi / yuz bilan kirishni yoqish';toast('Biometrik kirish o‘chirildi')}else{bioOn().then(function(){if(ls('g',BIO))$('#sBio').textContent='Barmoq izi / yuz bilan kirishni o‘chirish'})}};
+$('#sBio').onclick=function(){if(ls('g',BIO)){ls('r',BIO);if(NATIVE&&plg('NativeBiometric'))plg('NativeBiometric').deleteCredentials({server:NB_SERVER}).catch(function(){});$('#sBio').textContent='Barmoq izi / yuz bilan kirishni yoqish';toast('Biometrik kirish o‘chirildi')}else{bioOn().then(function(){if(ls('g',BIO))$('#sBio').textContent='Barmoq izi / yuz bilan kirishni o‘chirish'})}};
 $('#lbio').onclick=bioGo;
 $('#uTh').onclick=function(){uiNext('th',TH,'auto')};$('#uAc').onclick=function(){uiNext('ac',ACC,'teal')};$('#uFs').onclick=function(){uiNext('fs',FS,'m')};
 $('#dk').onclick=function(){flt.due=!flt.due;render()};
+$('#sShare').onclick=async function(){
+  var T='Maxfiy daftar: internetsiz ishlaydigan, shifrlangan shaxsiy daftar (yozuvlar, ro‘yxat, rasm, eslatma).\nAndroid (APK): https://github.com/shohjohonqarshiboyev14-commits/Daftar/releases/latest\nVeb (Android va iPhone): https://shohjohonqarshiboyev14-commits.github.io/Daftar/';
+  try{
+    if(NATIVE&&plg('Share'))await plg('Share').share({title:'Maxfiy daftar',text:T,dialogTitle:'Ilovani yuborish'});
+    else if(navigator.share)await navigator.share({title:'Maxfiy daftar',text:T});
+    else if(navigator.clipboard){await navigator.clipboard.writeText(T);toast('Havolalar nusxalandi')}
+    else prompt('Havolalarni nusxalang:',T);
+  }catch(e){}
+};
 $('#cl').onclick=function(e){var x=e.target.getAttribute('data-cx');if(x!==null){ecl.splice(+x,1);drawCl()}};
 $('#cl').onchange=function(e){var i=e.target.getAttribute('data-ci');if(i!==null){ecl[+i].d=e.target.checked;drawCl()}};
 $('#cAdd').onclick=addCl;
@@ -471,7 +505,7 @@ $('#iIn').onchange=async function(e){var f=e.target.files[0];e.target.value='';i
 $('#ims').onclick=function(e){var x=e.target.getAttribute('data-ix'),v=e.target.getAttribute('data-iv');if(x!==null){eim.splice(+x,1);drawIm()}else if(v!==null){$('#ivImg').src=imc[eim[+v]];$('#iv').hidden=false}};
 $('#iv').onclick=function(){$('#iv').hidden=true};
 $('#eIcs').onclick=makeIcs;
-if(NATIVE){$('#eIcs').textContent='Bildirishnoma eslatmasi qo‘yish';$('#sBio').hidden=true}
+if(NATIVE){$('#eIcs').textContent='Bildirishnoma eslatmasi qo‘yish'}
 $('#sClose').onclick=function(){$('#st').hidden=true};
 $('#sExp').onclick=exportBk;
 $('#sImp').onclick=function(){$('#fileIn').click()};
