@@ -59,6 +59,20 @@ jobs:
             }
           }
           EOF
+      - name: Maxfiylik (internet ruxsatini olib tashlash, zaxirani o'chirish)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          python3 - "$M" <<'PY'
+          import sys,re
+          p=sys.argv[1]
+          s=open(p).read()
+          s=re.sub(r'<uses-permission android:name="android.permission.INTERNET"\s*/>','<uses-permission android:name="android.permission.INTERNET" tools:node="remove" />',s)
+          if 'xmlns:tools' not in s:
+              s=s.replace('<manifest ','<manifest xmlns:tools="http://schemas.android.com/tools" ',1)
+          s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
+          open(p,'w').write(s)
+          PY
+          grep -n "INTERNET\|allowBackup" $M
       - name: APK qurish va imzolash
         run: |
           cd android
