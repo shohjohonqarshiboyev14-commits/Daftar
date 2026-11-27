@@ -262,7 +262,7 @@ function render(){
 function openEd(id){
   cur=id?items.filter(function(i){return i.id===id})[0]:null;
   $('#eT').value=cur?cur.title:'';$('#eB').value=cur?cur.body:'';$('#eG').value=cur?cur.tag:'';
-  ecl=cur&&cur.cl?cur.cl.map(function(c){return{t:c.t,d:c.d}}):[];eim=cur&&cur.im?cur.im.slice():[];newIm={};$('#eD').value=cur&&cur.due||'';$('#eTm').value=cur&&cur.tm||'';$('#cIn').value='';drawCl();loadIm();
+  ecl=cur&&cur.cl?cur.cl.map(function(c){return{t:c.t,d:c.d}}):[];eim=cur&&cur.im?cur.im.slice():[];newIm={};$('#eD').value=cur&&cur.due||'';$('#eTm').value=cur&&cur.tm||'';enid=0;$('#cIn').value='';drawCl();loadIm();
   $('#eDel').hidden=!cur;$('#eDel').textContent=cur&&cur.del?'Butunlay o‘chirish':'Savatga tashlash';$('#eRes').hidden=!(cur&&cur.del);$('#ed').hidden=false;$('#eT').focus();
 }
 async function saveEd(){
@@ -273,7 +273,7 @@ async function saveEd(){
   catch(e){toast('Rasmni saqlab bo‘lmadi (xotira to‘lgan bo‘lishi mumkin)');return}
   var prev=cur&&cur.im?cur.im.slice():[];
   if(!cur){cur={id:uid(),star:false};items.push(cur)}
-  cur.title=t;cur.body=b;cur.tag=g;cur.due=d;cur.tm=$('#eTm').value;cur.cl=ecl;cur.im=eim;cur.upd=Date.now();
+  cur.title=t;cur.body=b;cur.tag=g;cur.due=d;cur.tm=$('#eTm').value;if(enid)cur.nid=enid;cur.cl=ecl;cur.im=eim;cur.upd=Date.now();
   if(!(await save()))return;
   prev.forEach(function(id){if(eim.indexOf(id)<0)idbDel(id)});
   imc={};$('#ed').hidden=true;render();toast('Saqlandi');
@@ -287,10 +287,27 @@ async function delEd(){
 function bump(){clearTimeout(idleT);if(key)idleT=setTimeout(showLock,120000)}
 
 /* ---- Sozlamalar ---- */
+var NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()),enid=0;
+function plg(n){return window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins[n]}
+async function nativeRemind(d,t){
+  var LN=plg('LocalNotifications');
+  try{
+    var p=await LN.requestPermissions();if(p.display!=='granted'){toast('Bildirishnomaga ruxsat berilmadi');return}
+    var at=new Date(d+'T'+t+':00');if(at.getTime()<Date.now()+5000){toast('Bu vaqt o‘tib ketgan');return}
+    enid=(cur&&cur.nid)||enid||(Date.now()%2147000000);
+    await LN.schedule({notifications:[{id:enid,title:'Maxfiy daftar',body:'Eslatma vaqti keldi',schedule:{at:at,allowWhileIdle:true}}]});
+    toast('Eslatma qo‘yildi: '+d.split('-').reverse().join('.')+' '+t+'. Yozuvni saqlashni unutmang');
+  }catch(e){toast('Eslatma qo‘yib bo‘lmadi')}
+}
 async function exportBk(){
   var v=await seal();v.imgs={};
   for(var q=0;q<items.length;q++){var L=items[q].im||[];for(var w=0;w<L.length;w++){var rr=await idbGet(L[w]);if(rr)v.imgs[L[w]]={iv:b64(rr.iv),ct:b64(rr.ct)}}}
   var blob=new Blob([JSON.stringify(v)],{type:'application/json'});
+  if(NATIVE&&plg('Filesystem')&&plg('Share')){
+    try{var w=await plg('Filesystem').writeFile({path:'maxfiy-daftar-zaxira-'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify(v),directory:'CACHE',encoding:'utf8'});
+      await plg('Share').share({title:'Zaxira nusxa',url:w.uri});ls('s','md_bk',Date.now());render();toast('Zaxira nusxani Drive yoki boshqa joyga saqlang')}
+    catch(e){toast('Zaxira nusxani yuborib bo‘lmadi')}
+    return}
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='maxfiy-daftar-zaxira-'+new Date().toISOString().slice(0,10)+'.json';
   document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
@@ -355,6 +372,7 @@ function icsLocal(dt){return dt.getFullYear()+p2(dt.getMonth()+1)+p2(dt.getDate(
 function makeIcs(){
   var d=$('#eD').value,t=$('#eTm').value||'09:00';
   if(!d){toast('Avval muddat sanasini tanlang');return}
+  if(NATIVE&&plg('LocalNotifications')){return nativeRemind(d,t)}
   var ti=($('#eT').value.trim()||'Eslatma').replace(/[\\;,\r\n]/g,' ');
   if(!confirm('Telefon kalendariga faqat sarlavha ("'+ti+'") va vaqt yoziladi, matn yozilmaydi. Davom etilsinmi?'))return;
   var a=new Date(d+'T'+t+':00'),e=new Date(a.getTime()+18e5);
@@ -453,6 +471,7 @@ $('#iIn').onchange=async function(e){var f=e.target.files[0];e.target.value='';i
 $('#ims').onclick=function(e){var x=e.target.getAttribute('data-ix'),v=e.target.getAttribute('data-iv');if(x!==null){eim.splice(+x,1);drawIm()}else if(v!==null){$('#ivImg').src=imc[eim[+v]];$('#iv').hidden=false}};
 $('#iv').onclick=function(){$('#iv').hidden=true};
 $('#eIcs').onclick=makeIcs;
+if(NATIVE){$('#eIcs').textContent='Bildirishnoma eslatmasi qo‘yish';$('#sBio').hidden=true}
 $('#sClose').onclick=function(){$('#st').hidden=true};
 $('#sExp').onclick=exportBk;
 $('#sImp').onclick=function(){$('#fileIn').click()};
@@ -467,7 +486,7 @@ document.addEventListener('visibilitychange',function(){
 });
 
 uiApply();showLock();
-if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){navigator.serviceWorker.register('sw.js').catch(function(){})}
+if('serviceWorker' in navigator&&!NATIVE&&location.protocol.indexOf('http')===0){navigator.serviceWorker.register('sw.js').catch(function(){})}
 })();
 </script>
 </body>
