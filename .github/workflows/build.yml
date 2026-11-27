@@ -5,6 +5,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      KEYPASS: ${{ secrets.KEYPASS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -14,6 +16,17 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Imzo kaliti
+        run: |
+          test -n "$KEYPASS" || { echo "XATO: KEYPASS siri kiritilmagan"; exit 1; }
+          if [ ! -f release.keystore ]; then
+            keytool -genkeypair -keystore release.keystore -storetype PKCS12 -alias daftar -keyalg RSA -keysize 2048 -validity 10000 -storepass "$KEYPASS" -dname "CN=Maxfiy daftar"
+            git config user.name "github-actions"
+            git config user.email "actions@users.noreply.github.com"
+            git add release.keystore
+            git commit -m "Imzo kaliti"
+            git push
+          fi
       - name: Capacitor loyihasi
         run: |
           mkdir www
@@ -21,8 +34,17 @@ jobs:
           npm install
           npx cap add android
           npx cap sync android
-      - name: Skrinshotni taqiqlash
+      - name: Ikonka va skrinshotni taqiqlash
         run: |
+          command -v convert >/dev/null || sudo apt-get install -y imagemagick
+          R=android/app/src/main/res
+          for d in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            n=${d%%:*}; r=${d#*:}; l=${r%%:*}; f=${r#*:}
+            convert icon-512.png -resize ${l}x${l} $R/mipmap-$n/ic_launcher.png
+            cp $R/mipmap-$n/ic_launcher.png $R/mipmap-$n/ic_launcher_round.png
+            convert icon-512.png -resize $((f*66/100))x$((f*66/100)) -background none -gravity center -extent ${f}x${f} $R/mipmap-$n/ic_launcher_foreground.png
+          done
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="ic_launcher_background">#0B6E78</color></resources>' > $R/values/ic_launcher_background.xml
           mkdir -p android/app/src/main/java/uz/maxfiy/daftar
           cat > android/app/src/main/java/uz/maxfiy/daftar/MainActivity.java <<'EOF'
           package uz.maxfiy.daftar;
@@ -37,13 +59,17 @@ jobs:
             }
           }
           EOF
-      - name: APK qurish
+      - name: APK qurish va imzolash
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
+          cd ..
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/zipalign -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign --ks release.keystore --ks-pass env:KEYPASS --ks-key-alias daftar --out Maxfiy-daftar.apk aligned.apk
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: Maxfiy daftar v${{ github.run_number }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: Maxfiy-daftar.apk
