@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir www
           cp index.html manifest.json icon-192.png icon-512.png www/
-          npm install
+          npm install --legacy-peer-deps
           npx cap add android
           npx cap sync android
       - name: Ikonka va skrinshotni taqiqlash
@@ -48,14 +48,134 @@ jobs:
           mkdir -p android/app/src/main/java/uz/maxfiy/daftar
           cat > android/app/src/main/java/uz/maxfiy/daftar/MainActivity.java <<'EOF'
           package uz.maxfiy.daftar;
+
+          import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.net.Uri;
           import android.os.Bundle;
+          import android.util.Base64;
           import android.view.WindowManager;
+          import android.webkit.JavascriptInterface;
           import com.getcapacitor.BridgeActivity;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.util.ArrayList;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
           public class MainActivity extends BridgeActivity {
+            private String pending = null;
+
             @Override
             public void onCreate(Bundle b) {
               getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
               super.onCreate(b);
+              getBridge().getWebView().addJavascriptInterface(new Object() {
+                @JavascriptInterface
+                public String take() {
+                  String p = pending;
+                  pending = null;
+                  return p == null ? "" : p;
+                }
+              }, "DaftarShare");
+              handle(getIntent(), false);
+              setIntent(new Intent(Intent.ACTION_MAIN));
+            }
+
+            @Override
+            protected void onNewIntent(Intent i) {
+              super.onNewIntent(i);
+              handle(i, true);
+              setIntent(new Intent(Intent.ACTION_MAIN));
+            }
+
+            private void handle(Intent in, boolean live) {
+              if (in == null) return;
+              String a = in.getAction();
+              if (!Intent.ACTION_SEND.equals(a) && !Intent.ACTION_SEND_MULTIPLE.equals(a)) return;
+              try {
+                JSONObject o = new JSONObject();
+                String t = in.getStringExtra(Intent.EXTRA_TEXT);
+                String s = in.getStringExtra(Intent.EXTRA_SUBJECT);
+                o.put("text", t == null ? "" : t);
+                o.put("subject", s == null ? "" : s);
+                JSONArray imgs = new JSONArray();
+                JSONArray auds = new JSONArray();
+                ArrayList<Uri> uris = new ArrayList<Uri>();
+                if (Intent.ACTION_SEND.equals(a)) {
+                  Uri u = (Uri) in.getParcelableExtra(Intent.EXTRA_STREAM);
+                  if (u != null) uris.add(u);
+                } else {
+                  ArrayList<Uri> l = in.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                  if (l != null) uris.addAll(l);
+                }
+                for (Uri u : uris) {
+                  String mt = getContentResolver().getType(u);
+                  if (mt == null) mt = "";
+                  if (mt.startsWith("image/")) {
+                    String d = img(u);
+                    if (d != null) imgs.put(d);
+                  } else if (mt.startsWith("audio/")) {
+                    String d = aud(u, mt);
+                    if (d != null) auds.put(d);
+                  }
+                }
+                o.put("images", imgs);
+                o.put("audios", auds);
+                pending = o.toString();
+                if (live) {
+                  getBridge().getWebView().post(new Runnable() {
+                    public void run() {
+                      getBridge().getWebView().evaluateJavascript("window.daftarCheck&&window.daftarCheck()", null);
+                    }
+                  });
+                }
+              } catch (Exception e) {
+              }
+            }
+
+            private String img(Uri u) {
+              try {
+                BitmapFactory.Options op = new BitmapFactory.Options();
+                op.inJustDecodeBounds = true;
+                InputStream a = getContentResolver().openInputStream(u);
+                BitmapFactory.decodeStream(a, null, op);
+                a.close();
+                int sc = 1;
+                while (op.outWidth / sc > 1800 || op.outHeight / sc > 1800) sc *= 2;
+                BitmapFactory.Options o2 = new BitmapFactory.Options();
+                o2.inSampleSize = sc;
+                InputStream c = getContentResolver().openInputStream(u);
+                Bitmap bm = BitmapFactory.decodeStream(c, null, o2);
+                c.close();
+                if (bm == null) return null;
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                bm.compress(Bitmap.CompressFormat.JPEG, 85, bo);
+                return "data:image/jpeg;base64," + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+              } catch (Exception e) {
+                return null;
+              }
+            }
+
+            private String aud(Uri u, String mt) {
+              try {
+                InputStream a = getContentResolver().openInputStream(u);
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = a.read(buf)) > 0) {
+                  bo.write(buf, 0, n);
+                  if (bo.size() > 8000000) {
+                    a.close();
+                    return null;
+                  }
+                }
+                a.close();
+                return "data:" + mt + ";base64," + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+              } catch (Exception e) {
+                return null;
+              }
             }
           }
           EOF
@@ -71,6 +191,8 @@ jobs:
               s=s.replace('<manifest ','<manifest xmlns:tools="http://schemas.android.com/tools" ',1)
           s=s.replace('android:allowBackup="true"','android:allowBackup="false"')
           s=s.replace('</manifest>','<uses-permission android:name="android.permission.RECORD_AUDIO" />\n<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n</manifest>')
+          f='<intent-filter><action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="text/plain" /><data android:mimeType="image/*" /><data android:mimeType="audio/*" /></intent-filter><intent-filter><action android:name="android.intent.action.SEND_MULTIPLE" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="image/*" /></intent-filter>'
+          s=s.replace('</activity>',f+'</activity>',1)
           open(p,'w').write(s)
           PY
           grep -n "INTERNET\|allowBackup" $M
