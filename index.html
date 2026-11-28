@@ -293,7 +293,7 @@ function enter(){
   $('#lock').hidden=true;$('#app').hidden=false;document.body.classList.remove('onlock');
   flt={q:'',star:false,tag:'',trash:false};$('#q').value='';
   items=items.filter(function(i){var old=i.del&&Date.now()-i.del>=2592e6;if(old)(i.im||[]).forEach(function(id){idbDel(id)});return !old});
-  render();bump();migrateImgs();
+  render();bump();migrateImgs();setTimeout(shareApply,300);if(pendShare)setTimeout(procShare,400);
   if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 }
 
@@ -622,6 +622,48 @@ async function outFile(name,mime,data,isB64){
     }
   }catch(e){var m=String(e&&(e.message||e.name)).toLowerCase();if(m.indexOf('cancel')<0&&m.indexOf('abort')<0)toast('Faylni chiqarib bo‘lmadi')}
 }
+var pendShare=null,shareSig='',shareTs=0;
+async function chkShare(){
+  var SE=plg('ShareExtension');if(!SE)return;
+  try{
+    var r=await SE.checkSendIntentReceived();
+    if(!r||!r.payload||!r.payload.length)return;
+    var sg=JSON.stringify(r.payload);if(sg===shareSig&&Date.now()-shareTs<4000)return;
+    shareSig=sg;shareTs=Date.now();pendShare=r.payload;
+    if(key)procShare();
+  }catch(e){}
+}
+async function procShare(){
+  var P=pendShare;pendShare=null;if(!P||!key)return;
+  try{
+    var dc=function(v){try{return decodeURIComponent(v||'')}catch(e){return v||''}};
+    var txt=[],ids=[];
+    for(var i=0;i<P.length;i++){
+      var it=P[i],ty=dc(it.type),u=dc(it.url);
+      if(ty.indexOf('image')===0&&u&&plg('Filesystem')){
+        try{var f=await plg('Filesystem').readFile({path:u});var jp=await shrink(new Blob([unb64(f.data)],{type:ty}));var id=uid();await idbPut(id,await imgSeal(jp));ids.push(id)}catch(e){}
+      }else{var t=dc(it.description)||dc(it.title);if(t)txt.push(t)}
+    }
+    if(!txt.length&&!ids.length){toast('Ulashilgan narsani o‘qib bo‘lmadi');return}
+    var body=txt.join('\n\n'),first=(body.split('\n')[0]||'').trim();
+    items.push({id:uid(),star:false,title:first?first.slice(0,70):'Ulashilgan '+fmt(Date.now()),body:body,tag:'Telegram',cl:[],im:ids,upd:Date.now()});
+    await save();render();
+    toast('Saqlandi: '+(txt.length?'matn':'')+(ids.length?(txt.length?' va ':'')+ids.length+' ta rasm':''));
+    try{plg('ShareExtension').finish()}catch(e){}
+  }catch(e){toast('Saqlab bo‘lmadi')}
+}
+function shareApply(){
+  if(!key)return;
+  var p=null;try{var r=window.DaftarShare&&DaftarShare.take();if(r)p=JSON.parse(r)}catch(e){}
+  if(!p)return;
+  openEd(null);
+  var t=(p.text||'').trim(),sb=(p.subject||'').trim();
+  $('#eT').value=sb||t.split('\n')[0].slice(0,60);$('#eB').value=t;
+  if(!$('#eG').value)$('#eG').value='Telegram';
+  (p.images||[]).concat(p.audios||[]).forEach(function(u){var id=uid();imc[id]=u;newIm[id]=1;eim.push(id)});
+  drawIm();toast('Ulashilgan ma’lumot tayyor. Tekshirib, Saqlash ni bosing');
+}
+window.daftarCheck=function(){setTimeout(function(){if(key)shareApply();else toast('Kirgandan keyin ulashilgan ma’lumot ochiladi')},400)};
 var lkOpen=false,rec=null,rch=[],rt=0,rtm=0;
 async function lkHash(p,sl){var m=await crypto.subtle.importKey('raw',enc.encode(p),'PBKDF2',false,['deriveBits']);return b64(await crypto.subtle.deriveBits({name:'PBKDF2',salt:sl,iterations:200000,hash:'SHA-256'},m,256))}
 async function lkAuth(){
@@ -709,6 +751,7 @@ document.addEventListener('visibilitychange',function(){
 });
 
 uiApply();showLock();
+if(NATIVE){chkShare();window.addEventListener('sendIntentReceived',chkShare)}
 if('serviceWorker' in navigator&&!NATIVE&&location.protocol.indexOf('http')===0){navigator.serviceWorker.register('sw.js').catch(function(){})}
 })();
 </script>
